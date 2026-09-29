@@ -4,6 +4,8 @@ import torch
 import wandb
 
 import argparse
+import csv
+import os
 import pickle
 import random
 import sys
@@ -274,10 +276,28 @@ def experiment(
         )
         # wandb.watch(model)  # wandb has some bug
 
+    save_dir = os.path.join('runs', exp_prefix)
+    os.makedirs(save_dir, exist_ok=True)
+
     for iter in range(variant['max_iters']):
         outputs = trainer.train_iteration(num_steps=variant['num_steps_per_iter'], iter_num=iter+1, print_logs=True)
         if log_to_wandb:
             wandb.log(outputs)
+
+        torch.save({
+            'model': model.state_dict(),
+            'state_mean': state_mean,
+            'state_std': state_std,
+            'variant': variant,
+        }, os.path.join(save_dir, f'model_iter{iter+1}.pt'))
+        row = {'iter': iter+1, **outputs}
+        metrics_path = os.path.join(save_dir, 'metrics.csv')
+        write_header = not os.path.exists(metrics_path)
+        with open(metrics_path, 'a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=list(row.keys()))
+            if write_header:
+                writer.writeheader()
+            writer.writerow(row)
 
 
 if __name__ == '__main__':
